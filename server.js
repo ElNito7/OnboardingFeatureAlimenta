@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+app.use(express.json());
 
 const defaultData = {
     id: 1,
@@ -16,67 +17,79 @@ const defaultData = {
     dietary_preferences: "anything"
 }
 
-function getMacros(onboardingData) {
+function validateBasicTypes(data) {
+    if (data.age && typeof data.age !== "number") return false;
+    if (data.height && typeof data.height !== "number") return false;
+    if (data.weight && typeof data.weight !== "number") return false;
+    return true;
+}
 
-    // Aqui se procesaría los datos para calcular los macros...
-
-    // Se regresa un objeto con los macros
-    return {
-        fats: 20,
-        protein: 30,
-        carbs: 50,
+function validateReasonableLimits(data) {
+    if (data.age > 150 || data.height > 250 || data.weight > 300) {
+        return false;
     }
+    return true;
+}
+
+function getMacros(onboardingData) {
+    return { fats: 20, protein: 30, carbs: 50 }
 }
 
 app.post('/macros', (req, res) =>  {
     let onboardingData = req.body;
 
-    if (!onboardingData) {
+    if (!onboardingData || Object.keys(onboardingData).length === 0) {
         onboardingData = defaultData;
     }
 
-    const data = getMacros(onboardingData); // Función para calcular los macros
+    if (!validateBasicTypes(onboardingData)) {
+        return res.status(400).send({
+            error: "Invalid data types provided."
+        });
+    }
+
+    if (!validateReasonableLimits(onboardingData)) {
+        console.warn("Warning: unreasonable data provided");
+    }
+
+    const data = getMacros(onboardingData);
     res.send(data);
 });
 
-app.post('/onboarding', async (req, res) => {
-    let data = req.body;
+app.post('/onboarding', (req, res) => {
+    const data = req.body;
 
-    if (!data) {
-        data = defaultData;
+    if (!data || Object.keys(data).length === 0) {
+        return res.status(400).send({
+            error: "Body is required to create profile."
+        });
     }
 
-    const id = data.id;
+    if (!data.id) {
+        return res.status(400).send({
+            error: "User id is required."
+        });
+    }
 
-    // get user
-    // const getUser = fetch(`https://app.alimenta.app/api/users/${id}`);
-    // const resp = await getUser().json();
-    
-    let user = {
-        id: id,
+    if (typeof data.id !== "number") {
+        return res.status(400).send({
+            error: "Invalid id type. Must be a number."
+        });
+    }
+
+    const user = {
+        id: data.id,
         name: data.name,
         email: 'email@example.com',
-        onboardedAt: null,
-        // otra info del usuario
+        onboardedAt: Date.now()
     }
 
-    // set onboarding complete on user
-    user.onboardedAt = Date.now();
-
-    // save user on db
-    // fetch(`https://app.alimenta.app/api/users/${id}`, user);
-    
-    // create user profile
-    let profile = {
-        userId: id,
-        ...data,
+    const profile = {
+        userId: data.id,
+        ...data
     }
-    
-    // save profile on DB
-    // fetch(url, profile);
-    
-    // if user and profile saved succesfully on DB
-    res.status(201).send(profile); // 201 --> created
+
+    res.status(201).send(profile);
 });
 
 app.listen(3000, () => console.log('Server running on http://localhost:3000'));
